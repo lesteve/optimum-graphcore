@@ -264,3 +264,60 @@ python examples/language-modeling/run_clm.py \
     --pod_type pod16
 
 ```
+
+## GPT2 and causal language modeling
+
+The following example fine-tunes GPT2-small on WikiText-2. We're using the raw WikiText-2. Note that some IPU configurations are overridden.
+
+```bash
+python examples/language-modeling/run_clm.py \
+    --model_name_or_path gpt2 \
+    --ipu_config_name Graphcore/gpt2-small-ipu \
+    --dataset_name wikitext \
+    --dataset_config_name wikitext-2-raw-v1 \
+    --do_train \
+    --do_eval \
+    --num_train_epochs 30 \
+    --dataloader_num_workers 64 \
+    --per_device_train_batch_size 1 \
+    --per_device_eval_batch_size 1 \
+    --gradient_accumulation_steps 128 \
+    --output_dir /tmp/clm_gpt2 \
+    --logging_steps 1 \
+    --learning_rate 1e-5 \
+    --lr_scheduler_type linear \
+    --loss_scaling 16384 \
+    --weight_decay 0.01 \
+    --warmup_ratio 0.1 \
+    --ipu_config_overrides="embedding_serialization_factor=4,optimizer_state_offchip=true,inference_device_iterations=5" \
+    --dataloader_drop_last \
+    --pod_type pod16
+```
+
+To fine-tune GPT2-medium on WikiText-2, we need to override a different set of IPU configurations.
+
+```bash
+python examples/language-modeling/run_clm.py \
+    --model_name_or_path gpt2-medium \
+    --ipu_config_name Graphcore/gpt2-medium-ipu \
+    --dataset_name wikitext \
+    --dataset_config_name wikitext-2-raw-v1 \
+    --do_train \
+    --do_eval \
+    --num_train_epochs 30 \
+    --dataloader_num_workers 64 \
+    --per_device_train_batch_size 1 \
+    --per_device_eval_batch_size 1 \
+    --gradient_accumulation_steps 256 \
+    --output_dir /tmp/clm_gpt2_medium \
+    --logging_steps 1 \
+    --learning_rate 1e-5 \
+    --lr_scheduler_type linear \
+    --loss_scaling 16384 \
+    --weight_decay 0.01 \
+    --warmup_ratio 0.1 \
+    --ipu_config_overrides="embedding_serialization_factor=5,inference_device_iterations=9,replication_factor=2,inference_replication_factor=2,ipus_per_replica=8,layers_per_ipu=[0 3 3 3 3 4 4 4],matmul_proportion=0.25" \
+    --dataloader_drop_last \
+    --pod_type pod16
+
+```
