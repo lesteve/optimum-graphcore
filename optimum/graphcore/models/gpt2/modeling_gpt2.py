@@ -199,7 +199,10 @@ class PipelinedGPT2LMHeadModel(IPUGenerationMixin, GPT2LMHeadModel, PipelineMixi
     #         loss_fct = nn.CrossEntropyLoss()
     #         loss = loss_fct(lm_logits.view(-1, lm_logits.size(-1)), labels.view(-1))
 
-    #     output = (lm_logits,) + transformer_outputs[1:]
+    #     if self.ipu_config.embedding_serialization_factor > 1:
+    #         output = (lm_logits[:, :, :self.actual_vocab_size],) + transformer_outputs[1:]
+    #     else:
+    #         output = (lm_logits,) + transformer_outputs[1:]
     #     return (loss,) if loss is not None else output
 
     # This forward is() for generation
@@ -239,7 +242,10 @@ class PipelinedGPT2LMHeadModel(IPUGenerationMixin, GPT2LMHeadModel, PipelineMixi
             # TODO: Use the following line instead to ignore the padding logits
             # lm_logits[:, :, self.actual_vocab_size:] = -10000
 
-        output = (lm_logits,) + transformer_outputs[1:]
+        if self.ipu_config.embedding_serialization_factor > 1:
+            output = (lm_logits[:, :, :self.actual_vocab_size],) + transformer_outputs[1:]
+        else:
+            output = (lm_logits,) + transformer_outputs[1:]
         return output
 
 
