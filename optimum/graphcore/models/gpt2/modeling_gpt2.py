@@ -229,18 +229,6 @@ class PipelinedGPT2LMHeadModel(IPUGenerationMixin, GPT2LMHeadModel, PipelineMixi
         hidden_states = transformer_outputs[0]
 
         lm_logits = self.lm_head(hidden_states)
-        if self.ipu_config.embedding_serialization_factor > 1:
-            # Ignore the padding logits. Use masking because in-place modification on a slice is not supported yet.
-            padding_mask = torch.cat(
-                (
-                    torch.ones(self.actual_vocab_size),
-                    torch.zeros(self.config.vocab_size - self.actual_vocab_size),
-                )
-            )
-            lm_logits = lm_logits * padding_mask + (1 - padding_mask) * -10000.0
-
-            # TODO: Use the following line instead to ignore the padding logits
-            # lm_logits[:, :, self.actual_vocab_size:] = -10000
 
         if self.ipu_config.embedding_serialization_factor > 1:
             output = (lm_logits[:, :, :self.actual_vocab_size],) + transformer_outputs[1:]
