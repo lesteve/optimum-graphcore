@@ -148,14 +148,17 @@ def main():
     except KeyError:
         raise KeyError("the model {} you specified is not supported. You are welcome to add it and open a PR :)")
 
-    ipu_config = IPUConfig.from_pretrained(
-        args.ipu_config_name if args.ipu_config_name else args.model_name_or_path,
-        cache_dir=args.cache_dir,
-    )
-    if args.ipu_config_overrides:
-        logger.info(f"Overriding IPU config: {args.ipu_config_overrides}")
-        ipu_config.update_from_string(args.ipu_config_overrides)
-    ipu_config = ipu_config.for_pod_type(args.pod_type)
+    if args.ipu:
+        ipu_config = IPUConfig.from_pretrained(
+            args.ipu_config_name if args.ipu_config_name else args.model_name_or_path,
+            cache_dir=args.cache_dir,
+        )
+        if args.ipu_config_overrides:
+            logger.info(f"Overriding IPU config: {args.ipu_config_overrides}")
+            ipu_config.update_from_string(args.ipu_config_overrides)
+        ipu_config = ipu_config.for_pod_type(args.pod_type)
+        logger.info(ipu_config)
+
     tokenizer = tokenizer_class.from_pretrained(args.model_name_or_path)
     model = model_class.from_pretrained(args.model_name_or_path)
     if args.ipu:
@@ -174,7 +177,6 @@ def main():
         args.device = "cpu"
         model.to("cpu")
 
-    logger.info(ipu_config)
     logger.warning(f"device: {args.device}, 16-bits training: {args.fp16}")
 
     args.length = adjust_length_to_model(args.length, max_sequence_length=model.config.max_position_embeddings)
