@@ -171,6 +171,7 @@ def main():
             args.ipu_config_name if args.ipu_config_name else args.model_name_or_path,
             cache_dir=args.cache_dir,
         )
+        ipu_config = ipu_config.for_pod_type(args.pod_type)
         if args.ipu_config_overrides:
             logger.info(f"Overriding IPU config: {args.ipu_config_overrides}")
             ipu_config.update_from_string(args.ipu_config_overrides)
