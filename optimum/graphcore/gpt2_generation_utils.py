@@ -1107,8 +1107,16 @@ class IPUGenerationMixin(GenerationMixin):
                 if this_peer_finished_flag.item() == 0.0:
                     break
 
+            print ("================================================================")
+            input_len = input_ids.size()[1]
+            padding_size = self.max_seq_length - input_len
+            input_ids = nn.functional.pad(input_ids, (0, padding_size), "constant", 0)
+            model_kwargs['attention_mask'] = nn.functional.pad(model_kwargs['attention_mask'], (0, padding_size), "constant", 0)
+
             # prepare model inputs
             model_inputs = self.prepare_inputs_for_generation(input_ids, **model_kwargs)
+
+            print (model_inputs)
 
             # forward pass to get next token
             outputs = self.ipu_executor(
@@ -1123,11 +1131,16 @@ class IPUGenerationMixin(GenerationMixin):
                 outputs = CausalLMOutputWithCrossAttentions(
                     loss=None,
                     logits=outputs[0].float(),
-                    past_key_values=outputs[1],
+                    past_key_values=None,
                     hidden_states=None,
                     attentions=None,
                     cross_attentions=None,
                 )
+
+            # Restore to actual length
+            input_ids = input_ids[:, :input_len]
+            model_kwargs['attention_mask'] = model_kwargs['attention_mask'][:, :input_len]
+            outputs.logits = outputs.logits[:, :input_len, :]
 
             if synced_gpus and this_peer_finished:
                 cur_len = cur_len + 1
