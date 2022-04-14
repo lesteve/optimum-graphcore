@@ -1140,13 +1140,12 @@ class IPUGenerationMixin(GenerationMixin):
             # Restore to actual length
             input_ids = input_ids[:, :input_len]
             model_kwargs['attention_mask'] = model_kwargs['attention_mask'][:, :input_len]
-            outputs.logits = outputs.logits[:, :input_len, :]
 
             if synced_gpus and this_peer_finished:
                 cur_len = cur_len + 1
                 continue  # don't waste resources running the code we don't need
 
-            next_token_logits = outputs.logits[:, -1, :]
+            next_token_logits = outputs.logits[:, 0, :]
 
             # pre-process distribution
             next_token_scores = logits_processor(input_ids, next_token_logits)

@@ -23,6 +23,7 @@ from transformers import GPT2ForSequenceClassification, GPT2ForTokenClassificati
 
 from ...gpt2_generation_utils import IPUGenerationMixin
 from ...modeling_utils import (
+    OnehotGather,
     PipelineMixin,
     SerializedEmbedding,
     SerializedLinear,
@@ -103,6 +104,10 @@ class GPT2PipelineMixin(PipelineMixin):
 
 @register(GPT2LMHeadModel)
 class PipelinedGPT2LMHeadModel(IPUGenerationMixin, GPT2LMHeadModel, PipelineMixin):
+    def __init__(self, config):
+        super().__init__(config)
+        self.gather_indices = OnehotGather()
+
     def parallelize(self):
         """
         Transform the model to run in an IPU pipeline.
@@ -228,7 +233,11 @@ class PipelinedGPT2LMHeadModel(IPUGenerationMixin, GPT2LMHeadModel, PipelineMixi
         )
         hidden_states = transformer_outputs[0]
 
-        lm_logits = self.lm_head(hidden_states)
+        # Select only the last non-padding token for the classifier
+        positions = torch.sum(attention_mask, dim=1, keepdims=True) - 1
+        masked_output = self.gather_indices(hidden_states, positions)
+
+        lm_logits = self.lm_head(masked_output)
 
         if self.ipu_config.embedding_serialization_factor > 1:
             output = (lm_logits[:, :, :self.actual_vocab_size],) + transformer_outputs[1:]
