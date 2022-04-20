@@ -20,6 +20,7 @@
 
 import argparse
 import logging
+import sys
 
 import numpy as np
 import torch
@@ -253,7 +254,8 @@ def main():
         )
 
         generated_sequences.append(total_sequence)
-        print(total_sequence)
+        # Print utf-8 output
+        sys.stdout.buffer.write(total_sequence.encode('utf-8'))
 
     return generated_sequences
 
