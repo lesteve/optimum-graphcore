@@ -177,41 +177,40 @@ class PipelinedGPT2LMHeadModel(IPUGenerationMixin, GPT2LMHeadModel, PipelineMixi
             # Resize token embeddings back to origianl vocab_size
             self.resize_token_embeddings(self.actual_vocab_size)
 
-    # def forward(self, input_ids, attention_mask, labels=None):
-    #     transformer_outputs = self.transformer(input_ids, attention_mask=attention_mask)
-    #     hidden_states = transformer_outputs[0]
+    def _forward_for_train(self, input_ids, attention_mask, labels=None):
+        transformer_outputs = self.transformer(input_ids, attention_mask=attention_mask)
+        hidden_states = transformer_outputs[0]
 
-    #     lm_logits = self.lm_head(hidden_states)
-    #     if self.ipu_config.embedding_serialization_factor > 1:
-    #         # Ignore the padding logits. Use masking because in-place modification on a slice is not supported yet.
-    #         padding_mask = torch.cat(
-    #             (
-    #                 torch.ones(self.actual_vocab_size),
-    #                 torch.zeros(self.config.vocab_size - self.actual_vocab_size),
-    #             )
-    #         )
-    #         lm_logits = lm_logits * padding_mask + (1 - padding_mask) * -10000.0
+        lm_logits = self.lm_head(hidden_states)
+        if self.ipu_config.embedding_serialization_factor > 1:
+            # Ignore the padding logits. Use masking because in-place modification on a slice is not supported yet.
+            padding_mask = torch.cat(
+                (
+                    torch.ones(self.actual_vocab_size),
+                    torch.zeros(self.config.vocab_size - self.actual_vocab_size),
+                )
+            )
+            lm_logits = lm_logits * padding_mask + (1 - padding_mask) * -10000.0
 
-    #         # TODO: Use the following line instead to ignore the padding logits
-    #         # lm_logits[:, :, self.actual_vocab_size:] = -10000
+            # TODO: Use the following line instead to ignore the padding logits
+            # lm_logits[:, :, self.actual_vocab_size:] = -10000
 
-    #     loss = None
-    #     if labels is not None:
-    #         # Shift so that tokens < n predict n. Use roll() + ignore_index instead of slicing for better efficiency on IPUs.
-    #         labels = torch.roll(labels, -1, 1)
-    #         # By default the ignore_index of CrossEntropyLoss is -100
-    #         labels[:, -1] = -100
-    #         loss_fct = nn.CrossEntropyLoss()
-    #         loss = loss_fct(lm_logits.view(-1, lm_logits.size(-1)), labels.view(-1))
+        loss = None
+        if labels is not None:
+            # Shift so that tokens < n predict n. Use roll() + ignore_index instead of slicing for better efficiency on IPUs.
+            labels = torch.roll(labels, -1, 1)
+            # By default the ignore_index of CrossEntropyLoss is -100
+            labels[:, -1] = -100
+            loss_fct = nn.CrossEntropyLoss()
+            loss = loss_fct(lm_logits.view(-1, lm_logits.size(-1)), labels.view(-1))
 
-    #     if self.ipu_config.embedding_serialization_factor > 1:
-    #         output = (lm_logits[:, :, :self.actual_vocab_size],) + transformer_outputs[1:]
-    #     else:
-    #         output = (lm_logits,) + transformer_outputs[1:]
-    #     return (loss,) if loss is not None else output
+        if self.ipu_config.embedding_serialization_factor > 1:
+            output = (lm_logits[:, :, :self.actual_vocab_size],) + transformer_outputs[1:]
+        else:
+            output = (lm_logits,) + transformer_outputs[1:]
+        return (loss,) if loss is not None else output
 
-    # This forward is() for generation
-    def forward(
+    def _forward_for_generate(
         self,
         input_ids=None,
         attention_mask=None,
@@ -244,6 +243,8 @@ class PipelinedGPT2LMHeadModel(IPUGenerationMixin, GPT2LMHeadModel, PipelineMixi
         else:
             output = (lm_logits,) + transformer_outputs[1:]
         return output
+
+    forward = _forward_for_train
 
 
 @register(GPT2ForSequenceClassification)

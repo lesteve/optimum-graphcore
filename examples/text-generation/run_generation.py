@@ -184,6 +184,8 @@ def main():
     if args.ipu:
         args.device = "ipu"
         model = to_pipelined(model, ipu_config, force=False)
+        # Use _forward_for_generate instead of _forward_for_train
+        model.forward = model._forward_for_generate
         model.parallelize()
         if args.fp16:
             model.half()
