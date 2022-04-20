@@ -190,7 +190,6 @@ def main():
         if args.fp16:
             model.half()
         opts = ipu_config.to_options(for_inference=True)
-        # TODO: Should use pipelineing when doing auto-regressive generation
         opts.setExecutionStrategy(poptorch.ShardedExecution())
         model = poptorch.inferenceModel(model, opts)
         model.eval()
