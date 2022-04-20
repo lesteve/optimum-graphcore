@@ -62,12 +62,12 @@ def set_seed(args):
 def adjust_length_to_model(ipu, length, max_sequence_length, prompt_length):
     if ipu:
         # TODO: assert apply tp CPU too?
-        assert prompt_length < max_sequence_length, 'Prompt length must be smaller than max sequence length'
+        assert prompt_length < max_sequence_length, "Prompt length must be smaller than max sequence length"
         # Note that length + prompt_length must <= max_sequence_length
         if length < 0 and max_sequence_length > 0:
             length = max_sequence_length - prompt_length
         elif 0 < max_sequence_length < length + prompt_length:
-            length = max_sequence_length - prompt_length # No generation bigger than model size
+            length = max_sequence_length - prompt_length  # No generation bigger than model size
         elif length < 0:
             length = MAX_LENGTH  # avoid infinite loop
         return length
@@ -211,10 +211,10 @@ def main():
     # encoded_prompt = encoded_prompt.to(args.device)
 
     args.length = adjust_length_to_model(
-        args.ipu, 
-        args.length, 
-        max_sequence_length=args.max_seq_length if args.max_seq_length else model.config.max_position_embeddings, 
-        prompt_length=len(encoded_prompt[0])
+        args.ipu,
+        args.length,
+        max_sequence_length=args.max_seq_length if args.max_seq_length else model.config.max_position_embeddings,
+        prompt_length=len(encoded_prompt[0]),
     )
     logger.info(f"Length after adjustment: {args.length}")
 
@@ -257,7 +257,7 @@ def main():
 
         generated_sequences.append(total_sequence)
         # Print utf-8 output
-        sys.stdout.buffer.write(total_sequence.encode('utf-8'))
+        sys.stdout.buffer.write(total_sequence.encode("utf-8"))
 
     return generated_sequences
 

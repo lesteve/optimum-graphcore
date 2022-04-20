@@ -205,7 +205,7 @@ class PipelinedGPT2LMHeadModel(IPUGenerationMixin, GPT2LMHeadModel, PipelineMixi
             loss = loss_fct(lm_logits.view(-1, lm_logits.size(-1)), labels.view(-1))
 
         if self.ipu_config.embedding_serialization_factor > 1:
-            output = (lm_logits[:, :, :self.actual_vocab_size],) + transformer_outputs[1:]
+            output = (lm_logits[:, :, : self.actual_vocab_size],) + transformer_outputs[1:]
         else:
             output = (lm_logits,) + transformer_outputs[1:]
         return (loss,) if loss is not None else output
@@ -239,7 +239,7 @@ class PipelinedGPT2LMHeadModel(IPUGenerationMixin, GPT2LMHeadModel, PipelineMixi
         lm_logits = self.lm_head(masked_output)
 
         if self.ipu_config.embedding_serialization_factor > 1:
-            output = (lm_logits[:, :, :self.actual_vocab_size],) + transformer_outputs[1:]
+            output = (lm_logits[:, :, : self.actual_vocab_size],) + transformer_outputs[1:]
         else:
             output = (lm_logits,) + transformer_outputs[1:]
         return output
