@@ -1150,20 +1150,8 @@ class IPUGenerationMixin(GenerationMixin):
         unfinished_sequences = input_ids.new(input_ids.shape[0]).fill_(1)
         cur_len = input_ids.shape[-1]
 
-        this_peer_finished = False  # used by synced_gpus only
         # auto-regressive generation
         while True:
-
-            if synced_gpus:
-                # Under synced_gpus the `forward` call must continue until all gpus complete their sequence.
-                # The following logic allows an early break if all peers finished generating their sequence
-                this_peer_finished_flag = torch.tensor(0.0 if this_peer_finished else 1.0).to(input_ids.device)
-                # send 0.0 if we finished, 1.0 otherwise
-                dist.all_reduce(this_peer_finished_flag, op=dist.ReduceOp.SUM)
-                # did all peers finish? the reduced sum will be 0.0 then
-                if this_peer_finished_flag.item() == 0.0:
-                    break
-
             print("================================================================")
             input_len = input_ids.size()[1]
             padding_size = self.max_seq_length - input_len
@@ -1199,10 +1187,6 @@ class IPUGenerationMixin(GenerationMixin):
             # Restore to actual length
             input_ids = input_ids[:, :input_len]
             model_kwargs["attention_mask"] = model_kwargs["attention_mask"][:, :input_len]
-
-            if synced_gpus and this_peer_finished:
-                cur_len = cur_len + 1
-                continue  # don't waste resources running the code we don't need
 
             next_token_logits = outputs.logits[:, 0, :]
 
@@ -1252,10 +1236,7 @@ class IPUGenerationMixin(GenerationMixin):
 
             # stop when each sentence is finished, or if we exceed the maximum length
             if unfinished_sequences.max() == 0 or stopping_criteria(input_ids, scores):
-                if not synced_gpus:
-                    break
-                else:
-                    this_peer_finished = True
+                break
 
         if return_dict_in_generate:
             if self.config.is_encoder_decoder:
