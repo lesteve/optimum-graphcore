@@ -85,6 +85,18 @@ class IPUGenerationMixin(GenerationMixin):
           if `constraints!=None` or `force_words_ids!=None`.
     """
 
+    @staticmethod
+    def _poptorch_outputs_to_model_outputs(outputs):
+        if len(outputs) == 1:
+            return ModelOutput(
+                logits=outputs[0].float(),
+            )
+        else:
+            return ModelOutput(
+                loss=outputs[0].float(),
+                logits=outputs[1].float(),
+            )
+
     @torch.no_grad()
     def generate(
         self,
@@ -1168,21 +1180,8 @@ class IPUGenerationMixin(GenerationMixin):
             # forward pass to get next token
             outputs = self.ipu_executor(
                 **model_inputs,
-                # return_dict=True,
-                # output_attentions=output_attentions,
-                # output_hidden_states=output_hidden_states,
             )
-
-            # Make outputs a dict if it's not a dict already
-            if type(outputs) == tuple or type(outputs) == list:
-                outputs = CausalLMOutputWithCrossAttentions(
-                    loss=None,
-                    logits=outputs[0].float(),
-                    past_key_values=None,
-                    hidden_states=None,
-                    attentions=None,
-                    cross_attentions=None,
-                )
+            outputs = self._poptorch_outputs_to_model_outputs(outputs)
 
             # Restore to actual length
             input_ids = input_ids[:, :input_len]

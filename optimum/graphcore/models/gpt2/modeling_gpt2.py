@@ -242,7 +242,9 @@ class PipelinedGPT2LMHeadModel(IPUGenerationMixin, GPT2LMHeadModel, PipelineMixi
             output = (lm_logits[:, :, : self.actual_vocab_size],) + transformer_outputs[1:]
         else:
             output = (lm_logits,) + transformer_outputs[1:]
-        return output
+
+        # Only returning logits since currently cannot make use of other outputs
+        return output[:1]
 
     forward = _forward_for_train
 
