@@ -1194,24 +1194,23 @@ class IPUGenerationMixin(GenerationMixin):
             next_token_scores = logits_processor(input_ids, next_token_logits)
             next_token_scores = logits_warper(input_ids, next_token_scores)
 
-            # TODO: enable that?
-            # # Store scores, attentions and hidden_states when required
-            # if return_dict_in_generate:
-            #     if output_scores:
-            #         scores += (next_token_scores,)
-            #     if output_attentions:
-            #         decoder_attentions += (
-            #             (outputs.decoder_attentions,) if self.config.is_encoder_decoder else (outputs.attentions,)
-            #         )
-            #         if self.config.is_encoder_decoder:
-            #             cross_attentions += (outputs.cross_attentions,)
+            # Store scores, attentions and hidden_states when required
+            if return_dict_in_generate:
+                if output_scores:
+                    scores += (next_token_scores,)
+                if output_attentions:
+                    decoder_attentions += (
+                        (outputs.decoder_attentions,) if self.config.is_encoder_decoder else (outputs.attentions,)
+                    )
+                    if self.config.is_encoder_decoder:
+                        cross_attentions += (outputs.cross_attentions,)
 
-            #     if output_hidden_states:
-            #         decoder_hidden_states += (
-            #             (outputs.decoder_hidden_states,)
-            #             if self.config.is_encoder_decoder
-            #             else (outputs.hidden_states,)
-            #         )
+                if output_hidden_states:
+                    decoder_hidden_states += (
+                        (outputs.decoder_hidden_states,)
+                        if self.config.is_encoder_decoder
+                        else (outputs.hidden_states,)
+                    )
 
             # sample
             probs = nn.functional.softmax(next_token_scores, dim=-1)
