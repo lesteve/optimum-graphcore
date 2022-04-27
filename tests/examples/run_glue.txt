@@ -29,16 +29,6 @@
 >         revision=model_args.model_revision,
 >         use_auth_token=True if model_args.use_auth_token else None,
 >     )
-<<<<<<< HEAD
-485,486d489
-<     elif training_args.fp16:
-<         data_collator = DataCollatorWithPadding(tokenizer, pad_to_multiple_of=8)
-491c494
-<     trainer = Trainer(
----
->     trainer = IPUTrainer(
-492a496
-=======
 338a340,344
 >     # Customize tokenization for GPT2. We reuse the EOS token as the PAD token.
 >     if config.model_type == "gpt2":
@@ -53,5 +43,4 @@
 ---
 >     trainer = IPUTrainer(
 471a476
->>>>>>> Update diff files for glue, xnli, ner
 >         ipu_config=ipu_config,
