@@ -1169,9 +1169,12 @@ class IPUGenerationMixin(GenerationMixin):
         while True:
             print("================================================================")
             input_ids = self._pad_tensors_to_max_len(input_ids, self.max_seq_length, pad_token_id)
-            model_kwargs["attention_mask"] = self._pad_tensors_to_max_len(
-                model_kwargs["attention_mask"], self.max_seq_length, 0
-            )
+            # For a seq2seq model such as BART, the "attention_mask" is the enocder/cross attention mask and it does not require padding.
+            pad_attention_mask = model_kwargs["attention_mask"].shape[1] < input_ids.shape[1]
+            if pad_attention_mask:
+                model_kwargs["attention_mask"] = self._pad_tensors_to_max_len(
+                    model_kwargs["attention_mask"], self.max_seq_length, 0
+                )
 
             # prepare model inputs
             model_inputs = self.prepare_inputs_for_generation(input_ids, **model_kwargs)
@@ -1186,7 +1189,8 @@ class IPUGenerationMixin(GenerationMixin):
 
             # Remove padding and restore to actual length
             input_ids = input_ids[:, :cur_len]
-            model_kwargs["attention_mask"] = model_kwargs["attention_mask"][:, :cur_len]
+            if pad_attention_mask:
+                model_kwargs["attention_mask"] = model_kwargs["attention_mask"][:, :cur_len]
 
             next_token_logits = outputs.logits[:, 0, :]
 
