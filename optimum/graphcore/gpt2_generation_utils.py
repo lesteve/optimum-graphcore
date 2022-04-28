@@ -85,6 +85,9 @@ class IPUGenerationMixin(GenerationMixin):
           if `constraints!=None` or `force_words_ids!=None`.
     """
 
+    def _pad_input_to_max_length(self, input_tensor: torch.Tensor, max_length: int, pad_token_id: int) -> torch.Tensor:
+        return nn.functional.pad(input_tensor, (0, max_length - input_tensor.shape[1]), "constant", pad_token_id)
+
     @staticmethod
     def _poptorch_outputs_to_model_outputs(outputs):
         if len(outputs) == 1:
@@ -1165,11 +1168,9 @@ class IPUGenerationMixin(GenerationMixin):
         # auto-regressive generation
         while True:
             print("================================================================")
-            input_len = input_ids.size()[1]
-            padding_size = self.max_seq_length - input_len
-            input_ids = nn.functional.pad(input_ids, (0, padding_size), "constant", 0)
-            model_kwargs["attention_mask"] = nn.functional.pad(
-                model_kwargs["attention_mask"], (0, padding_size), "constant", 0
+            input_ids = self._pad_input_to_max_length(input_ids, self.max_seq_length, pad_token_id)
+            model_kwargs["attention_mask"] = self._pad_input_to_max_length(
+                model_kwargs["attention_mask"], self.max_seq_length, 0
             )
 
             # prepare model inputs
@@ -1183,9 +1184,9 @@ class IPUGenerationMixin(GenerationMixin):
             )
             outputs = self._poptorch_outputs_to_model_outputs(outputs)
 
-            # Restore to actual length
-            input_ids = input_ids[:, :input_len]
-            model_kwargs["attention_mask"] = model_kwargs["attention_mask"][:, :input_len]
+            # Remove padding and restore to actual length
+            input_ids = input_ids[:, :cur_len]
+            model_kwargs["attention_mask"] = model_kwargs["attention_mask"][:, :cur_len]
 
             next_token_logits = outputs.logits[:, 0, :]
 
