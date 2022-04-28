@@ -85,8 +85,8 @@ class IPUGenerationMixin(GenerationMixin):
           if `constraints!=None` or `force_words_ids!=None`.
     """
 
-    def _pad_input_to_max_length(self, input_tensor: torch.Tensor, max_length: int, pad_token_id: int) -> torch.Tensor:
-        return nn.functional.pad(input_tensor, (0, max_length - input_tensor.shape[1]), "constant", pad_token_id)
+    def _pad_tensors_to_max_len(self, tensor: torch.Tensor, max_length: int, pad_token_id: int) -> torch.Tensor:
+        return nn.functional.pad(tensor, (0, max_length - tensor.shape[1]), "constant", pad_token_id)
 
     @staticmethod
     def _poptorch_outputs_to_model_outputs(outputs):
@@ -1168,8 +1168,8 @@ class IPUGenerationMixin(GenerationMixin):
         # auto-regressive generation
         while True:
             print("================================================================")
-            input_ids = self._pad_input_to_max_length(input_ids, self.max_seq_length, pad_token_id)
-            model_kwargs["attention_mask"] = self._pad_input_to_max_length(
+            input_ids = self._pad_tensors_to_max_len(input_ids, self.max_seq_length, pad_token_id)
+            model_kwargs["attention_mask"] = self._pad_tensors_to_max_len(
                 model_kwargs["attention_mask"], self.max_seq_length, 0
             )
 
