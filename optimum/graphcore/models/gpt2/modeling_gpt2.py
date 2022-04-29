@@ -239,9 +239,9 @@ class PipelinedGPT2LMHeadModel(IPUGenerationMixin, GPT2LMHeadModel, PipelineMixi
         lm_logits = self.lm_head(masked_output)
 
         if self.ipu_config.embedding_serialization_factor > 1:
-            output = (lm_logits[:, :, : self.actual_vocab_size],) + transformer_outputs[1:]
+            output = (lm_logits[:, 0, : self.actual_vocab_size],) + transformer_outputs[1:]
         else:
-            output = (lm_logits,) + transformer_outputs[1:]
+            output = (lm_logits[:, 0, :],) + transformer_outputs[1:]
 
         # Only returning logits since currently cannot make use of other outputs
         return output[:1]

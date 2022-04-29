@@ -1194,7 +1194,11 @@ class IPUGenerationMixin(GenerationMixin):
             if not self.config.is_encoder_decoder:
                 model_kwargs["attention_mask"] = model_kwargs["attention_mask"][:, :cur_len]
 
-            next_token_logits = outputs.logits[:, 0, :]
+            if outputs.logits.dim() == 3:
+                next_token_logits = outputs.logits[:, cur_len - 1, :]
+            # If the dimension of logits is 2, then only the logits of the last non-padding token is returned, so no need to slice.
+            else:
+                next_token_logits = outputs.logits
 
             # pre-process distribution
             next_token_scores = logits_processor(input_ids, next_token_logits)
