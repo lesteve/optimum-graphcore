@@ -50,13 +50,7 @@ MODEL_CLASSES = {
 def set_seed(args):
     np.random.seed(args.seed)
     torch.manual_seed(args.seed)
-    # if args.n_gpu > 0:
-    #     torch.cuda.manual_seed_all(args.seed)
-
-
-#
-# Functions to prepare models' input
-#
+    # TODO: Set seed for IPU.
 
 
 def adjust_length_to_model(ipu, length, max_sequence_length, prompt_length):
@@ -98,33 +92,9 @@ def main():
         required=True,
         help="Path to pre-trained model or shortcut name selected in the list: " + ", ".join(MODEL_CLASSES.keys()),
     )
-    parser.add_argument(
-        "--ipu_config_name",
-        default=None,
-        type=str,
-        help="Pretrained IPU config name or path if not the same as model_name.",
-    )
-    parser.add_argument(
-        "--cache_dir",
-        default=None,
-        type=str,
-        help="Path to directory to store the pretrained models downloaded from huggingface.co",
-    )
-    parser.add_argument(
-        "--ipu_config_overrides",
-        default=None,
-        type=str,
-        help="Override some existing ipu config settings. Example: device_iterations=4,gradient_accumulation_steps=64",
-    )
-    parser.add_argument(
-        "--pod_type",
-        default=None,
-        type=str,
-        help="The POD type to run the `Trainer` on. Choices:" + ", ".join(ALLOWED_POD_TYPES),
-    )
 
     parser.add_argument("--prompt", type=str, default="")
-    parser.add_argument("--length", type=int, default=20, help="The length of the number of generated tokens.")
+    parser.add_argument("--length", type=int, default=20, help="The length of the number of tokens to be generated.")
     parser.add_argument("--stop_token", type=str, default=None, help="Token at which text generation is stopped")
 
     parser.add_argument(
@@ -150,6 +120,32 @@ def main():
         "--fp16",
         action="store_true",
         help="Whether to use 16-bit (mixed) precision (through NVIDIA apex) instead of 32-bit",
+    )
+
+    # IPU specific arguments
+    parser.add_argument(
+        "--ipu_config_name",
+        default=None,
+        type=str,
+        help="Pretrained IPU config name or path if not the same as model_name.",
+    )
+    parser.add_argument(
+        "--cache_dir",
+        default=None,
+        type=str,
+        help="Path to directory to store the pretrained models downloaded from huggingface.co",
+    )
+    parser.add_argument(
+        "--ipu_config_overrides",
+        default=None,
+        type=str,
+        help="Override some existing ipu config settings. Example: device_iterations=4,gradient_accumulation_steps=64",
+    )
+    parser.add_argument(
+        "--pod_type",
+        default=None,
+        type=str,
+        help="The POD type to run the `Trainer` on. Choices:" + ", ".join(ALLOWED_POD_TYPES),
     )
     args = parser.parse_args()
 
