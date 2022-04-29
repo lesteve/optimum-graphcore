@@ -103,7 +103,7 @@ class GPT2PipelineMixin(PipelineMixin):
 
 
 @register(GPT2LMHeadModel)
-class PipelinedGPT2LMHeadModel(IPUGenerationMixin, GPT2LMHeadModel, PipelineMixin):
+class PipelinedGPT2LMHeadModel(GPT2LMHeadModel, PipelineMixin, IPUGenerationMixin):
     def __init__(self, config):
         super().__init__(config)
         self.gather_indices = OnehotGather()
