@@ -1136,6 +1136,8 @@ class IPUGenerationMixin(GenerationMixin):
                 UserWarning,
             )
             stopping_criteria = validate_stopping_criteria(stopping_criteria, max_length)
+        else:
+            max_length = stopping_criteria.max_length
         logits_warper = logits_warper if logits_warper is not None else LogitsProcessorList()
         pad_token_id = pad_token_id if pad_token_id is not None else self.config.pad_token_id
         eos_token_id = eos_token_id if eos_token_id is not None else self.config.eos_token_id
@@ -1168,11 +1170,11 @@ class IPUGenerationMixin(GenerationMixin):
         # auto-regressive generation
         while True:
             print("================================================================")
-            input_ids = self._pad_tensors_to_max_len(input_ids, self.max_seq_length, pad_token_id)
+            input_ids = self._pad_tensors_to_max_len(input_ids, max_length, pad_token_id)
             # For a seq2seq model such as BART, the "attention_mask" is the enocder/cross attention mask and it does not require padding.
             if not self.config.is_encoder_decoder:
                 model_kwargs["attention_mask"] = self._pad_tensors_to_max_len(
-                    model_kwargs["attention_mask"], self.max_seq_length, 0
+                    model_kwargs["attention_mask"], max_length, 0
                 )
 
             # prepare model inputs

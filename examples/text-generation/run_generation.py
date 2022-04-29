@@ -124,12 +124,6 @@ def main():
 
     parser.add_argument("--prompt", type=str, default="")
     parser.add_argument("--length", type=int, default=20, help="The length of the number of generated tokens.")
-    parser.add_argument(
-        "--max_seq_length",
-        type=int,
-        default=None,
-        help="The maximum total input sequence length (prompt length + generation length)",
-    )
     parser.add_argument("--stop_token", type=str, default=None, help="Token at which text generation is stopped")
 
     parser.add_argument(
@@ -194,7 +188,6 @@ def main():
         model = poptorch.inferenceModel(model, opts)
         model.eval()
         model._user_model.ipu_executor = model
-        model._user_model.max_seq_length = args.max_seq_length
     else:
         args.device = "cpu"
         model.to("cpu")
@@ -212,7 +205,7 @@ def main():
     args.length = adjust_length_to_model(
         args.ipu,
         args.length,
-        max_sequence_length=args.max_seq_length if args.max_seq_length else model.config.max_position_embeddings,
+        max_sequence_length=model.config.max_position_embeddings,
         prompt_length=len(encoded_prompt[0]),
     )
     logger.info(f"Length after adjustment: {args.length}")
