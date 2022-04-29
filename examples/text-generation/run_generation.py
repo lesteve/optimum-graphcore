@@ -60,8 +60,9 @@ def set_seed(args):
 
 
 def adjust_length_to_model(ipu, length, max_sequence_length, prompt_length):
+    # IPU requires padding so we need to make sure length + prompt_length < max_sequence_length, otherwise we will pad to length that is larger than max_sequence_length
     if ipu:
-        # TODO: assert apply tp CPU too?
+        # TODO: this assert apply tp CPU too?
         assert prompt_length < max_sequence_length, "Prompt length must be smaller than max sequence length"
         # Note that length + prompt_length must <= max_sequence_length
         if length < 0 and max_sequence_length > 0:
@@ -187,7 +188,7 @@ def main():
         opts.setExecutionStrategy(poptorch.ShardedExecution())
         model = poptorch.inferenceModel(model, opts)
         model.eval()
-        model._user_model.ipu_executor = model
+        model._user_model.poptorch_model = model
     else:
         args.device = "cpu"
         model.to("cpu")

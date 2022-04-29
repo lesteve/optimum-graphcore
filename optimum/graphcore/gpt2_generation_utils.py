@@ -1170,6 +1170,7 @@ class IPUGenerationMixin(GenerationMixin):
         # auto-regressive generation
         while True:
             print("================================================================")
+            print(cur_len)
             input_ids = self._pad_tensors_to_max_len(input_ids, max_length, pad_token_id)
             # For a seq2seq model such as BART, the "attention_mask" is the enocder/cross attention mask and it does not require padding.
             if not self.config.is_encoder_decoder:
@@ -1183,7 +1184,7 @@ class IPUGenerationMixin(GenerationMixin):
             print(model_inputs)
 
             # forward pass to get next token
-            outputs = self.ipu_executor(
+            outputs = self.poptorch_model(
                 **model_inputs,
             )
             outputs = self._poptorch_outputs_to_model_outputs(outputs)
