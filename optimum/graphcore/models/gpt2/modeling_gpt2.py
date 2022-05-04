@@ -21,7 +21,7 @@ import poptorch
 from optimum.utils import logging
 from transformers import GPT2ForSequenceClassification, GPT2ForTokenClassification, GPT2LMHeadModel
 
-from ...gpt2_generation_utils import IPUGenerationMixin
+from ...generation_utils import IPUGenerationMixin
 from ...modeling_utils import (
     OnehotGather,
     PipelineMixin,
