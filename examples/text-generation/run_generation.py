@@ -29,7 +29,7 @@ import poptorch
 from optimum.graphcore import IPUConfig
 from optimum.graphcore.ipu_configuration import ALLOWED_POD_TYPES
 from optimum.graphcore.modeling_utils import to_pipelined
-from transformers import GPT2LMHeadModel, GPT2Tokenizer
+from transformers import AutoConfig, GPT2LMHeadModel, GPT2Tokenizer
 
 
 logging.basicConfig(
@@ -91,6 +91,18 @@ def main():
         type=str,
         required=True,
         help="Path to pre-trained model or shortcut name selected in the list: " + ", ".join(MODEL_CLASSES.keys()),
+    )
+    parser.add_argument(
+        "--config_name",
+        default=None,
+        type=str,
+        help="Pretrained config name or path if not the same as model_name",
+    )
+    parser.add_argument(
+        "--config_overrides",
+        default=None,
+        type=str,
+        help="Override some existing default config settings when a model is trained from scratch. Example: n_embd=10,resid_pdrop=0.2,scale_attn_weights=false,summary_type=cls_index",
     )
 
     parser.add_argument("--prompt", type=str, default="")
@@ -158,6 +170,15 @@ def main():
     except KeyError:
         raise KeyError("the model {} you specified is not supported. You are welcome to add it and open a PR :)")
 
+    config = AutoConfig.from_pretrained(
+        args.config_name or args.model_name_or_path,
+        cache_dir=args.cache_dir,
+    )
+    if args.config_overrides is not None:
+        logger.info(f"Overriding config: {args.config_overrides}")
+        config.update_from_string(args.config_overrides)
+    logger.info(config)
+
     if args.ipu:
         ipu_config = IPUConfig.from_pretrained(
             args.ipu_config_name if args.ipu_config_name else args.model_name_or_path,
@@ -171,7 +192,11 @@ def main():
         logger.info(ipu_config)
 
     tokenizer = tokenizer_class.from_pretrained(args.model_name_or_path)
-    model = model_class.from_pretrained(args.model_name_or_path)
+    model = model_class.from_pretrained(
+        args.model_name_or_path,
+        config=config,
+        cache_dir=args.cache_dir,
+    )
     if args.ipu:
         args.device = "ipu"
         model = to_pipelined(model, ipu_config, force=False)

@@ -28,6 +28,7 @@ python examples/text-generation/run_generation.py \
   --model_name_or_path=gpt2 \
   --ipu_config_name Graphcore/gpt2-small-ipu \
   --ipu_config_overrides="embedding_serialization_factor=4,inference_device_iterations=1" \
+  --config_overrides="activation_function=gelu" \
   --pod_type pod4 \
   --ipu \
   --fp16 \
