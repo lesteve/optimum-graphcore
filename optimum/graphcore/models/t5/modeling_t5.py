@@ -12,6 +12,7 @@
 #  See the License for the specific language governing permissions and
 #  limitations under the License.
 
+import math
 import warnings
 
 import torch
@@ -40,6 +41,21 @@ logger = logging.get_logger(__name__)
 
 
 class CustomT5Stack(T5Stack):
+
+    def prepare_for_parallelize(self, user_id=None, ipu_id=None):
+        self.user_id = user_id
+        self.ipu_id = ipu_id
+        # self_attn = self.block[0].layer[0].SelfAttention
+        # self.relative_attention_bias = self_attn.relative_attention_bias
+        # self.relative_attention_num_buckets = self_attn.relative_attention_num_buckets
+        # self.relative_attention_max_distance = self_attn.relative_attention_max_distance
+        # self_attn.relative_attention_bias = None
+        # self_attn.relative_attention_num_buckets = None
+        # self_attn.relative_attention_max_distance = None
+
+
+        # self.relative_attention_biaself.block[0].layer[0].SelfAttention.relative_attention_bias
+
     def invert_attention_mask(self, encoder_attention_mask: Tensor) -> Tensor:
         if encoder_attention_mask.dim() == 3:
             encoder_extended_attention_mask = encoder_attention_mask[:, None, :, :]
@@ -55,6 +71,273 @@ class CustomT5Stack(T5Stack):
         # Always use -1e4 to avoid NaN issues.
         encoder_extended_attention_mask = (1.0 - encoder_extended_attention_mask) * -1e4
         return encoder_extended_attention_mask
+
+    @staticmethod
+    def _relative_position_bucket(relative_position, bidirectional=True, num_buckets=32, max_distance=128):
+        """
+        Adapted from Mesh Tensorflow:
+        https://github.com/tensorflow/mesh/blob/0cb87fe07da627bf0b7e60475d59f95ed6b5be3d/mesh_tensorflow/transformer/transformer_layers.py#L593
+
+        Translate relative position to a bucket number for relative attention. The relative position is defined as
+        memory_position - query_position, i.e. the distance in tokens from the attending position to the attended-to
+        position. If bidirectional=False, then positive relative positions are invalid. We use smaller buckets for
+        small absolute relative_position and larger buckets for larger absolute relative_positions. All relative
+        positions >=max_distance map to the same bucket. All relative positions <=-max_distance map to the same bucket.
+        This should allow for more graceful generalization to longer sequences than the model has been trained on
+
+        Args:
+            relative_position: an int32 Tensor
+            bidirectional: a boolean - whether the attention is bidirectional
+            num_buckets: an integer
+            max_distance: an integer
+
+        Returns:
+            a Tensor with the same shape as relative_position, containing int32 values in the range [0, num_buckets)
+        """
+        relative_buckets = 0
+        if bidirectional:
+            num_buckets //= 2
+            relative_buckets += (relative_position > 0).to(torch.long) * num_buckets
+            relative_position = torch.abs(relative_position)
+        else:
+            relative_position = -torch.min(relative_position, torch.zeros_like(relative_position))
+        # now relative_position is in the range [0, inf)
+
+        # half of the buckets are for exact increments in positions
+        max_exact = num_buckets // 2
+        is_small = relative_position < max_exact
+
+        # The other half of the buckets are for logarithmically bigger bins in positions up to max_distance
+        relative_position_if_large = max_exact + (
+            torch.log(relative_position.float() / max_exact)
+            / math.log(max_distance / max_exact)
+            * (num_buckets - max_exact)
+        ).to(torch.long)
+        relative_position_if_large = torch.min(
+            relative_position_if_large, torch.full_like(relative_position_if_large, num_buckets - 1)
+        )
+
+        relative_buckets += torch.where(is_small, relative_position, relative_position_if_large)
+        return relative_buckets
+
+    # def compute_bias(self, query_length, key_length, device=None):
+    #     """Compute binned relative position bias"""
+    #     if device is None:
+    #         device = self.relative_attention_bias.weight.device
+    #     context_position = torch.arange(query_length, dtype=torch.long, device=device)[:, None]
+    #     memory_position = torch.arange(key_length, dtype=torch.long, device=device)[None, :]
+    #     relative_position = memory_position - context_position  # shape (query_length, key_length)
+    #     relative_position_bucket = self._relative_position_bucket(
+    #         relative_position,  # shape (query_length, key_length)
+    #         bidirectional=(not self.is_decoder),
+    #         num_buckets=self.relative_attention_num_buckets,
+    #         max_distance=self.relative_attention_max_distance,
+    #     )
+    #     values = self.relative_attention_bias(relative_position_bucket)  # shape (query_length, key_length, num_heads)
+    #     values = values.permute([2, 0, 1]).unsqueeze(0)  # shape (1, num_heads, query_length, key_length)
+    #     return values
+
+    def compute_bias(self, query_length, key_length, device=None):
+        """Compute binned relative position bias"""
+        self_attn = self.block[0].layer[0].SelfAttention
+        if device is None:
+            # device = self.relative_attention_bias.weight.device
+            device = self_attn.relative_attention_bias.weight.device
+        context_position = torch.arange(query_length, dtype=torch.long, device=device)[:, None]
+        memory_position = torch.arange(key_length, dtype=torch.long, device=device)[None, :]
+        relative_position = memory_position - context_position  # shape (query_length, key_length)
+        # relative_position_bucket = self._relative_position_bucket(
+        relative_position_bucket = self_attn._relative_position_bucket(
+            relative_position,  # shape (query_length, key_length)
+            bidirectional=(not self.is_decoder),
+            # num_buckets=self.relative_attention_num_buckets,
+            # max_distance=self.relative_attention_max_distance,
+            num_buckets=self_attn.relative_attention_num_buckets,
+            max_distance=self_attn.relative_attention_max_distance,
+        )
+        # values = self.relative_attention_bias(relative_position_bucket)  # shape (query_length, key_length, num_heads)
+        values = self_attn.relative_attention_bias(relative_position_bucket)  # shape (query_length, key_length, num_heads)
+        values = values.permute([2, 0, 1]).unsqueeze(0)  # shape (1, num_heads, query_length, key_length)
+        return values
+
+    def forward(
+        self,
+        input_ids=None,
+        attention_mask=None,
+        encoder_hidden_states=None,
+        encoder_attention_mask=None,
+        inputs_embeds=None,
+        head_mask=None,
+        cross_attn_head_mask=None,
+        past_key_values=None,
+        use_cache=None,
+        output_attentions=None,
+        output_hidden_states=None,
+        return_dict=None,
+    ):
+        use_cache = use_cache if use_cache is not None else self.config.use_cache
+        output_attentions = output_attentions if output_attentions is not None else self.config.output_attentions
+        output_hidden_states = (
+            output_hidden_states if output_hidden_states is not None else self.config.output_hidden_states
+        )
+        return_dict = return_dict if return_dict is not None else self.config.use_return_dict
+
+        if input_ids is not None and inputs_embeds is not None:
+            err_msg_prefix = "decoder_" if self.is_decoder else ""
+            raise ValueError(
+                f"You cannot specify both {err_msg_prefix}input_ids and {err_msg_prefix}inputs_embeds at the same time"
+            )
+        elif input_ids is not None:
+            input_shape = input_ids.size()
+            input_ids = input_ids.view(-1, input_shape[-1])
+        elif inputs_embeds is not None:
+            input_shape = inputs_embeds.size()[:-1]
+        else:
+            err_msg_prefix = "decoder_" if self.is_decoder else ""
+            raise ValueError(f"You have to specify either {err_msg_prefix}input_ids or {err_msg_prefix}inputs_embeds")
+
+        if inputs_embeds is None:
+            assert self.embed_tokens is not None, "You have to initialize the model with valid token embeddings"
+            inputs_embeds = self.embed_tokens(input_ids)
+
+        batch_size, seq_length = input_shape
+
+        # required mask seq length can be calculated via length of past
+        mask_seq_length = past_key_values[0][0].shape[2] + seq_length if past_key_values is not None else seq_length
+
+        if use_cache is True:
+            assert self.is_decoder, f"`use_cache` can only be set to `True` if {self} is used as a decoder"
+
+        with poptorch.Block(user_id=self.user_id, ipu_id=self.ipu_id):
+            if attention_mask is None:
+                attention_mask = torch.ones(batch_size, mask_seq_length).to(inputs_embeds.device)
+            if self.is_decoder and encoder_attention_mask is None and encoder_hidden_states is not None:
+                encoder_seq_length = encoder_hidden_states.shape[1]
+                encoder_attention_mask = torch.ones(
+                    batch_size, encoder_seq_length, device=inputs_embeds.device, dtype=torch.long
+                )
+
+            # initialize past_key_values with `None` if past does not exist
+            if past_key_values is None:
+                past_key_values = [None] * len(self.block)
+
+            # We can provide a self-attention mask of dimensions [batch_size, from_seq_length, to_seq_length]
+            # ourselves in which case we just need to make it broadcastable to all heads.
+            extended_attention_mask = self.get_extended_attention_mask(attention_mask, input_shape, device=attention_mask.device)
+
+            # If a 2D or 3D attention mask is provided for the cross-attention
+            # we need to make broadcastable to [batch_size, num_heads, seq_length, seq_length]
+            if self.is_decoder and encoder_hidden_states is not None:
+                encoder_batch_size, encoder_sequence_length, _ = encoder_hidden_states.size()
+                encoder_hidden_shape = (encoder_batch_size, encoder_sequence_length)
+                if encoder_attention_mask is None:
+                    encoder_attention_mask = torch.ones(encoder_hidden_shape, device=inputs_embeds.device)
+                encoder_extended_attention_mask = self.invert_attention_mask(encoder_attention_mask)
+            else:
+                encoder_extended_attention_mask = None
+
+            # Prepare head mask if needed
+            head_mask = self.get_head_mask(head_mask, self.config.num_layers)
+            cross_attn_head_mask = self.get_head_mask(cross_attn_head_mask, self.config.num_layers)
+            present_key_value_states = () if use_cache else None
+            all_hidden_states = () if output_hidden_states else None
+            all_attentions = () if output_attentions else None
+            all_cross_attentions = () if (output_attentions and self.is_decoder) else None
+            position_bias = None
+
+            if position_bias is None:
+                real_seq_length = inputs_embeds.size(1)
+                key_length = inputs_embeds.size(1)
+                position_bias = self.compute_bias(real_seq_length, key_length)
+
+                # if key and values are already calculated
+                # we want only the last query position bias
+                # if past_key_values is not None:
+                #     position_bias = position_bias[:, :, -hidden_states.size(1) :, :]
+
+                position_bias = position_bias + extended_attention_mask  # (batch_size, n_heads, seq_length, key_length)
+
+            encoder_decoder_position_bias = None
+            if self.is_decoder and encoder_hidden_states is not None:
+                encoder_decoder_position_bias = encoder_extended_attention_mask
+
+            hidden_states = self.dropout(inputs_embeds)
+
+        for i, (layer_module, past_key_value) in enumerate(zip(self.block, past_key_values)):
+            layer_head_mask = head_mask[i]
+            cross_attn_layer_head_mask = cross_attn_head_mask[i]
+
+            if output_hidden_states:
+                all_hidden_states = all_hidden_states + (hidden_states,)
+
+            layer_outputs = layer_module(
+                hidden_states,
+                attention_mask=extended_attention_mask,
+                position_bias=position_bias,
+                encoder_hidden_states=encoder_hidden_states,
+                encoder_attention_mask=encoder_extended_attention_mask,
+                encoder_decoder_position_bias=encoder_decoder_position_bias,
+                layer_head_mask=layer_head_mask,
+                cross_attn_layer_head_mask=cross_attn_layer_head_mask,
+                past_key_value=past_key_value,
+                use_cache=use_cache,
+                output_attentions=output_attentions,
+            )
+
+            # layer_outputs is a tuple with:
+            # hidden-states, key-value-states, (self-attention position bias), (self-attention weights), (cross-attention position bias), (cross-attention weights)
+            if use_cache is False:
+                layer_outputs = layer_outputs[:1] + (None,) + layer_outputs[1:]
+
+            hidden_states, present_key_value_state = layer_outputs[:2]
+
+            # We share the position biases between the layers - the first layer store them
+            # layer_outputs = hidden-states, key-value-states (self-attention position bias), (self-attention weights),
+            # (cross-attention position bias), (cross-attention weights)
+            # position_bias = layer_outputs[2]
+            # if self.is_decoder and encoder_hidden_states is not None:
+            #     encoder_decoder_position_bias = layer_outputs[4 if output_attentions else 3]
+            # append next layer key value states
+            if use_cache:
+                present_key_value_states = present_key_value_states + (present_key_value_state,)
+
+            if output_attentions:
+                all_attentions = all_attentions + (layer_outputs[3],)
+                if self.is_decoder:
+                    all_cross_attentions = all_cross_attentions + (layer_outputs[5],)
+
+            # Model Parallel: If it's the last layer for that device, put things on the next device
+            if self.model_parallel:
+                for k, v in self.device_map.items():
+                    if i == v[-1] and "cuda:" + str(k) != self.last_device:
+                        hidden_states = hidden_states.to("cuda:" + str(k + 1))
+
+        hidden_states = self.final_layer_norm(hidden_states)
+        hidden_states = self.dropout(hidden_states)
+
+        # Add last layer
+        if output_hidden_states:
+            all_hidden_states = all_hidden_states + (hidden_states,)
+
+        if not return_dict:
+            return tuple(
+                v
+                for v in [
+                    hidden_states,
+                    present_key_value_states,
+                    all_hidden_states,
+                    all_attentions,
+                    all_cross_attentions,
+                ]
+                if v is not None
+            )
+        return BaseModelOutputWithPastAndCrossAttentions(
+            last_hidden_state=hidden_states,
+            past_key_values=present_key_value_states,
+            hidden_states=all_hidden_states,
+            attentions=all_attentions,
+            cross_attentions=all_cross_attentions,
+        )
 
 
 @register(T5ForConditionalGeneration)
@@ -160,6 +443,9 @@ class PipelinedT5ForConditionalGeneration(
         # Use a custom T5Stack implementation because sharing the position bias causes OOM error
         self.encoder.__class__ = CustomT5Stack
         self.decoder.__class__ = CustomT5Stack
+        # For some reason, the poptorch blocks containing before the stack ot T5Blocks need to share the same user_id
+        self.encoder.prepare_for_parallelize("Stack", 0)
+        self.decoder.prepare_for_parallelize("Stack", 0)
 
         # Enable autocast for T5LayerNorm because computation cannot happen in fp16
         for mod in self.modules():
