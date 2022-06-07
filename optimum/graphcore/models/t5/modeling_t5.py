@@ -368,7 +368,7 @@ class PipelinedT5ForConditionalGeneration(
         self.decoder.__class__ = CustomT5Stack
         # For some reason, the poptorch blocks containing before the stack ot T5Blocks need to share the same user_id
         self.encoder.prepare_for_parallelize("Stack", 0)
-        self.decoder.prepare_for_parallelize("Stack", 0)
+        self.decoder.prepare_for_parallelize("Stack", 0)# layer_ipu[len(self.encoder.block)])
 
         # Enable autocast for T5LayerNorm because computation cannot happen in fp16
         for mod in self.modules():
@@ -580,6 +580,7 @@ class PipelinedT5ForConditionalGeneration(
             input_ids=input_ids,
             attention_mask=attention_mask,
             decoder_input_ids=decoder_input_ids,
+            decoder_attention_mask=torch.ones_like(decoder_input_ids),
             labels=labels,
             use_cache=False,
             return_dict=False,
