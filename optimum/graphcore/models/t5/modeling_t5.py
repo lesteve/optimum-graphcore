@@ -181,6 +181,7 @@ class CustomT5Stack(T5Stack):
                 position_bias = (
                     position_bias + extended_attention_mask
                 )  # (batch_size, n_heads, seq_length, key_length)
+                position_bias = poptorch.recomputationCheckpoint(position_bias)
 
             encoder_decoder_position_bias = None
             if self.is_decoder and encoder_hidden_states is not None:
