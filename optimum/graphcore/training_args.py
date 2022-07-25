@@ -278,6 +278,12 @@ class IPUTrainingArguments:
         metadata={"help": "The way data should be accessed.", "choices": ["sync", "async", "async_rebatched"]},
     )
     compile_only: bool = field(default=False, metadata={"help": ""})
+
+    pipeline_ipus: int = field(default=4, metadata={"The number of IPUs in the pipeline for evaluation"})
+    eval_pipeline_ipus: int = field(default=4, metadata={"The number of IPUs in the pipeline"})
+    num_ipus: int = field(default=4, metadata={"The total number of IPUs to run on. (Must be a power of 2 and >= pipeline_ipus)"})
+    eval_num_ipus: int = field(default=4, metadata={"The total number of IPUs to run on for evaluation. (Must be a power of 2 and >= eval_pipeline_ipus)"})
+
     ipu_config_overrides: Optional[str] = field(
         default=None,
         metadata={
@@ -443,6 +449,12 @@ class IPUTrainingArguments:
 
         if self.gradient_checkpointing:
             override_str.append("recompute_checkpoint_every_layer=True")
+        
+        if self.pipeline_ipus:
+            override_str.append(f"ipus_per_replica={self.pipeline_ipus}")
+
+        if self.eval_pipeline_ipus:
+            override_str.append(f"inference_ipus_per_replica={self.eval_pipeline_ipus}")
 
         if override_str:
             override_str = ",".join(override_str)

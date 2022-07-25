@@ -41,7 +41,9 @@ class IPUConfig(BaseConfig):
         self.seed = kwargs.pop("seed", None)
 
         self.ipus_per_replica = kwargs.pop("ipus_per_replica", 1)
+        self.inference_ipus_per_replica = kwargs.pop("inference_ipus_per_replica", self.ipus_per_replica)
         self.layers_per_ipu = kwargs.pop("layers_per_ipu", [1])
+        self.inference_layers_per_ipu = kwargs.pop("inference_layers_per_ipu", self.layers_per_ipu)
 
         self.replication_factor = kwargs.pop("replication_factor", 1)
         self.inference_replication_factor = kwargs.pop("inference_replication_factor", 1)
@@ -60,6 +62,7 @@ class IPUConfig(BaseConfig):
         self.sharded_execution_for_inference = kwargs.pop("sharded_execution_for_inference", False)
 
         self.matmul_proportion = kwargs.pop("matmul_proportion", 0.6)
+        self.inference_matmul_proportion = kwargs.pop("inference_matmul_proportion", self.matmul_proportion)
 
         self.enable_half_first_order_momentum = kwargs.pop("enable_half_first_order_momentum", False)
         self.enable_half_partials = kwargs.pop("enable_half_partials", False)
