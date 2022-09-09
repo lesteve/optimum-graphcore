@@ -62,7 +62,7 @@ class IPUConfig(BaseConfig):
 
         self.sharded_execution_for_inference = kwargs.pop("sharded_execution_for_inference", False)
 
-        self.matmul_proportion = kwargs.pop("matmul_proportion", 0.6)
+        self.matmul_proportion = kwargs.pop("matmul_proportion", 0.25)
         self.inference_matmul_proportion = kwargs.pop("inference_matmul_proportion", self.matmul_proportion)
 
         self.enable_half_first_order_momentum = kwargs.pop("enable_half_first_order_momentum", False)
