@@ -294,12 +294,6 @@ class IPUTrainingArguments:
             "help": "Will pad each batch up to a fixed size, this ensures that the compiled model will have an input with the proper shape, and allows to not use drop_last during training."
         },
     )
-    complete_last_batch: bool = field(
-        default=False,
-        metadata={
-            "help": "Will pad each batch up to a fixed size, this ensures that the compiled model will have an input with the proper shape, and allows to not use drop_last during training."
-        },
-    )
 
     def __post_init__(self):
         # convert to int
