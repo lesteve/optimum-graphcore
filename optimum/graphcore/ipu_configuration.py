@@ -33,6 +33,12 @@ ALLOWED_POD_TYPES = ["pod4", "pod8", "pod16", "pod32", "pod64"]
 ALLOWED_NUM_IPUS = [1, 2, 4, 8, 16, 32, 64]
 
 
+def _get_max_num_ipus():
+    # TODO implement properly using `gc-inventory`
+    return 16
+
+
+
 class IPUConfig(BaseConfig):
     CONFIG_NAME = "ipu_config.json"
     FULL_CONFIGURATION_FILE = "ipu_config.json"
@@ -129,7 +135,7 @@ class IPUConfig(BaseConfig):
         """
         if num_ipus is None:
             # TODO max number of IPUs available
-            num_ipus = 16
+            num_ipus = _get_max_num_ipus()
 
         if eval_num_ipus is None:
             eval_num_ipus = num_ipus
