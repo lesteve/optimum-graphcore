@@ -252,13 +252,13 @@ class IPUTrainingArguments:
         default=None,
         metadata={"help": "[Deprecated] The POD type to run the `Trainer` on.", "choices": ALLOWED_POD_TYPES},
     )
-    ipu_pipeline_len: int = field(default=4, metadata={"The number of IPUs in the pipeline"})
-    eval_ipu_pipeline_len: int = field(default=4, metadata={"The number of IPUs in the pipeline for evaluation"})
-    layers_per_ipu = List[int] = field(
+    ipu_pipeline_len: int = field(default=4, metadata={"help": "The number of IPUs in the pipeline", "choices": ALLOWED_NUM_IPUS})
+    eval_ipu_pipeline_len: int = field(default=4, metadata={"help": "The number of IPUs in the pipeline for evaluation", "choices": ALLOWED_NUM_IPUS})
+    layers_per_ipu: List[int] = field(
         default=None,
         metadata={"help": "List of ints specifying how many encoder/decoder layers to place sequentially on IPUs in the pipeline"}
     )
-    eval_layers_per_ipu = List[int] = field(
+    eval_layers_per_ipu: List[int] = field(
         default=None,
         metadata={"help": "List of ints specifying how many encoder/decoder layers to place sequentially on IPUs in the pipeline for evaluation"}
     )
@@ -461,10 +461,10 @@ class IPUTrainingArguments:
                 self.num_ipus = int(self.pod_type[3:])
         
         if self.ipu_pipeline_len:
-            override_str.append(f"ipus_per_replica={self.pipeline_ipus}")
+            override_str.append(f"ipus_per_replica={self.ipu_pipeline_len}")
 
         if self.eval_ipu_pipeline_len:
-            override_str.append(f"inference_ipus_per_replica={self.eval_pipeline_ipus}")
+            override_str.append(f"inference_ipus_per_replica={self.eval_ipu_pipeline_len}")
 
         if self.layers_per_ipu:
             override_str.append(f'layers_per_ipu=[{" ".join(self.layers_per_ipu)}]')
