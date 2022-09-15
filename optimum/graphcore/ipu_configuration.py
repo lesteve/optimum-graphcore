@@ -84,42 +84,46 @@ class IPUConfig(BaseConfig):
 
         self.execute_encoder_on_cpu_for_generation = kwargs.pop("execute_encoder_on_cpu_for_generation", False)
 
-    def _prepare_config_attribute_for_pod_type(
-        self, config_attribute_name: str, config_attribute: Union[Any, Dict[str, Any]], pod_type: Optional[str]
-    ) -> Any:
-        """
-        Prepares a config attribute by extracting the proper value for this attribute considering the POD type.
+    # def _prepare_config_attribute_for_pod_type(
+    #     self, config_attribute_name: str, config_attribute: Union[Any, Dict[str, Any]], pod_type: Optional[str]
+    # ) -> Any:
+    #     """
+    #     Prepares a config attribute by extracting the proper value for this attribute considering the POD type.
 
-        Args:
-            config_attribute_name: The config attribute name (i.e. the name of the config field).
-            config_attribute: The config attribute to extract the value from.
-            pod_type: The POD type.
+    #     Args:
+    #         config_attribute_name: The config attribute name (i.e. the name of the config field).
+    #         config_attribute: The config attribute to extract the value from.
+    #         pod_type: The POD type.
 
-        Returns:
-            The extracted config attribute value.
-        """
-        if not isinstance(config_attribute, dict) or not config_attribute.keys() <= (
-            set(ALLOWED_POD_TYPES) | {"default"}
-        ):
-            return config_attribute
+    #     Returns:
+    #         The extracted config attribute value.
+    #     """
+    #     if not isinstance(config_attribute, dict) or not config_attribute.keys() <= (
+    #         set(ALLOWED_POD_TYPES) | {"default"}
+    #     ):
+    #         return config_attribute
 
-        if pod_type is None and "default" not in config_attribute:
-            raise RuntimeError(
-                f"No POD type was specified and no default value was provided for {config_attribute_name}, cannot infer"
-                " which value to use"
-            )
-        elif pod_type is None:
-            return config_attribute["default"]
-        elif pod_type not in ALLOWED_POD_TYPES:
-            raise ValueError(
-                f"{pod_type} is not a correct value for a POD type, supported POD types: {', '.join(ALLOWED_POD_TYPES)}"
-            )
-        elif pod_type not in config_attribute:
-            raise KeyError(
-                f"the {config_attribute_name} configuration field does not contain a value for POD type {pod_type}"
-            )
-        else:
-            return config_attribute[pod_type]
+    #     if pod_type is None and "default" not in config_attribute:
+    #         raise RuntimeError(
+    #             f"No POD type was specified and no default value was provided for {config_attribute_name}, cannot infer"
+    #             " which value to use"
+    #         )
+    #     elif pod_type is None:
+    #         return config_attribute["default"]
+    #     elif pod_type not in ALLOWED_POD_TYPES:
+    #         raise ValueError(
+    #             f"{pod_type} is not a correct value for a POD type, supported POD types: {', '.join(ALLOWED_POD_TYPES)}"
+    #         )
+    #     elif pod_type not in config_attribute:
+    #         raise KeyError(
+    #             f"the {config_attribute_name} configuration field does not contain a value for POD type {pod_type}"
+    #         )
+    #     else:
+    #         return config_attribute[pod_type]
+
+    def _get_replication_factor(self, num_ipus: int, ipus_per_replica: int) -> int:
+        assert num_ipus % ipus_per_replica == 0, "num_ipus not divisible by ipus_per_replica"
+        return num_ipus // ipus_per_replica
 
     def for_num_ipus(self, num_ipus: Optional[int] = None, eval_num_ipus: Optional[int] = None) -> "IPUConfig":
         """
@@ -141,10 +145,8 @@ class IPUConfig(BaseConfig):
             eval_num_ipus = num_ipus
 
         # Calculate the replication factor given the num_ipus
-        assert num_ipus % self.ipus_per_replica == 0, "num_ipus not compatible with ipus_per_replica"
-        self.replication_factor = num_ipus // self.ipus_per_replica 
-        assert eval_num_ipus % self.inference_ipus_per_replica == 0, "eval_num_ipus not compatible with inference_ipus_per_replica"
-        self.inference_replication_factor = eval_num_ipus // self.inference_ipus_per_replica
+        self.replication_factor = self._get_replication_factor(num_ipus, self.ipus_per_replica)
+        self.inference_replication_factor = self._get_replication_factor(eval_num_ipus, self.inference_ipus_per_replica)
         print("for_num_ipus:", self.replication_factor, self.inference_replication_factor)
         return self
 
@@ -306,7 +308,7 @@ class IPUConfig(BaseConfig):
         """
         return self._to_options(for_inference=for_inference, compile_only=compile_only)
 
-    def batch_size_factor(self, for_inference: bool = False) -> int:
+    def batch_size_factor(self, for_inference: bool = False, num_ipus: int = None) -> int:
         """
         Computes the factor to apply to the micro batch size to get the combined batch size.
 
@@ -316,9 +318,12 @@ class IPUConfig(BaseConfig):
         Returns:
             The batch size factor.
         """
-        replication_factor = (
-            self.inference_replication_factor if for_inference else self.replication_factor
-        )
+        if num_ipus is None:
+            replication_factor = (
+                self.inference_replication_factor if for_inference else self.replication_factor
+            )
+        else:
+            replication_factor = self._get_replication_factor(num_ipus, self.inference_ipus_per_replica if for_inference else self.ipus_per_replica)
         gradient_accumulation_steps = 1 if for_inference else self.gradient_accumulation_steps
         device_iterations = self.inference_device_iterations if for_inference else self.device_iterations
         return replication_factor * gradient_accumulation_steps * device_iterations
